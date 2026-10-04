@@ -1,6 +1,7 @@
 """Translate a language file in batches, preserving its keys and formatting."""
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -65,8 +66,10 @@ def request(payload, api_key):
                 raise ValueError('API response exceeded the input budget')
             return json.loads(body, object_pairs_hook=unique_object)
     except urllib.error.HTTPError as error:
+        if error.code == 402:
+            raise ValueError('DeepSeek balance exhausted. Top up and repeat the command to resume.') from None
         raise ValueError(f'DeepSeek HTTP {error.code}; no automatic retry was made') from None
-    except urllib.error.URLError:
+    except (urllib.error.URLError, TimeoutError):
         raise ValueError('DeepSeek connection failed; no automatic retry was made') from None
 
 
@@ -104,6 +107,7 @@ def main(argv=None, client=request):
     parser.add_argument('--name', required=True, help='Target language name, for example Russian')
     parser.add_argument('--model', default='deepseek-flash')
     parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--max-batches', type=int, help='Optional limit for a trial run')
     parser.add_argument('--execute', action='store_true', help='Send paid API requests; otherwise preview only')
     args = parser.parse_args(argv)
     if args.source.resolve() == args.output.resolve():
@@ -112,6 +116,8 @@ def main(argv=None, client=request):
         parser.error('Batch size must be between 1 and 128')
     if not CODE.fullmatch(args.language) or not args.name.strip():
         parser.error('A valid language code and name are required')
+    if args.max_batches is not None and args.max_batches < 1:
+        parser.error('Max batches must be positive')
     source = read(args.source)
     target = read(args.output) if args.output.exists() else Language(args.language, args.name, {})
     if target.code != args.language:
@@ -125,9 +131,24 @@ def main(argv=None, client=request):
         print('Preview only. Add --execute to translate using paid API requests.')
         return 0
     key = os.environ.get('DEEPSEEK_API_KEY')
+    if not key and Path('.env').exists():
+        for line in Path('.env').read_text().splitlines():
+            name, separator, value = line.partition('=')
+            if separator and name.strip() == 'DEEPSEEK_API_KEY':
+                key = value.strip().strip("\"'")
     if not key:
         raise ValueError('Set DEEPSEEK_API_KEY before --execute')
-    for start in range(0, len(pending), args.batch_size):
+    fingerprint = hashlib.sha256(args.source.read_bytes()).hexdigest()
+    checkpoint = args.output.with_suffix(args.output.suffix + '.source.json')
+    if checkpoint.exists():
+        if json.loads(checkpoint.read_text())['source_sha256'] != fingerprint:
+            raise ValueError('Source changed; use a different output file to avoid mixing translations')
+    else:
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint.write_text(json.dumps({'source_sha256': fingerprint}) + '\n')
+    for number, start in enumerate(range(0, len(pending), args.batch_size)):
+        if args.max_batches is not None and number >= args.max_batches:
+            break
         batch = pending[start:start + args.batch_size]
         payload, protected = payload_for(source, batch, args.name, args.model, 8192)
         additions = decoded_rows(client(payload, key), protected)
@@ -144,5 +165,7 @@ def main(argv=None, client=request):
 if __name__ == '__main__':
     try:
         raise SystemExit(main())
+    except KeyboardInterrupt:
+        raise SystemExit('Stopped. Completed batches are saved; repeat the command to resume.') from None
     except (ValueError, KeyError, IndexError, OSError) as error:
         raise SystemExit(str(error)) from None
