@@ -16,7 +16,7 @@ python3 -m tools.translate --source local/en.lang --output work/ru.lang --langua
 
 To translate, set `DEEPSEEK_API_KEY` in your environment or in a local `.env` file and add `--execute` to the same command. This sends source text to DeepSeek and incurs API charges. The model defaults to `deepseek-flash`; select another with `--model`.
 
-The script saves each completed batch. Repeat the same command to resume: keys already in the output are preserved. Run one translator at a time per output file. It checks keys, formatting tags, placeholders and line breaks before saving. It does not automatically retry failed requests. Review wording and text length manually before using a generated pack.
+The script saves each completed batch. Repeat the same command to resume: keys already in the output are preserved. Run one translator at a time per output file. It checks keys, formatting tags, placeholders and line breaks before saving. It does not automatically retry failed HTTP requests. Invalid model output is retried in smaller batches; these additional API calls also incur charges. If even one row fails validation, the run stops without changing that row. Review wording and text length manually before using a generated pack.
 
 Other languages work the same way: for example, use `--language es --name Spanish`. Source and output files must be different. Keep the same source file when resuming; a small checkpoint beside the output checks its fingerprint. If the balance runs out, top up and repeat the command. Use `--max-batches 1` for a trial run.
 
