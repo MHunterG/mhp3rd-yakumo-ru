@@ -1,0 +1,14 @@
+# Early Russian UI sample. The full translation is not available yet.
+# Missing entries use the installed game's text. Review Cyrillic rendering in game.
+language = ru
+name = Russian
+
+[16]
+2:4 = Кол-во
+2:20 = Отмена
+2:21 = Да
+2:22 = Нет
+2:23 = ~B12~C34Да~C00~B13　　Нет　
+2:24 = 　Да　　~B12~C34Нет~C00~B13
+2:25 = ~B12~C34Заменить~C00~B13　　Убрать　
+2:26 = 　Заменить　　~B12~C34Убрать~C00~B13
