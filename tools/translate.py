@@ -150,6 +150,9 @@ def main(argv=None, client=request):
     batches = [pending[start:start + args.batch_size] for start in range(0, len(pending), args.batch_size)]
     if args.max_batches is not None:
         batches = batches[:args.max_batches]
+    failures_path = args.output.with_suffix(args.output.suffix + '.failures.json')
+    failures = json.loads(failures_path.read_text()) if failures_path.exists() else []
+    failures = [identity for identity in failures if tuple(identity) not in target.rows]
     while batches:
         batch = batches.pop(0)
         payload, protected = payload_for(source, batch, args.name, args.model, 8192)
@@ -162,15 +165,24 @@ def main(argv=None, client=request):
                 raise ValueError('; '.join(errors))
         except (ValueError, KeyError, IndexError, TypeError):
             if len(batch) == 1:
-                raise ValueError(f'Model returned an invalid translation for {batch[0]}; completed rows are saved') from None
+                identity = list(batch[0])
+                if identity not in failures:
+                    failures.append(identity)
+                failures_path.write_text(json.dumps(failures, indent=2) + '\n')
+                print(f'Deferred invalid row {batch[0]}; continuing with the rest', flush=True)
+                continue
             middle = len(batch) // 2
             batches[0:0] = [batch[:middle], batch[middle:]]
             print(f'Invalid model output; splitting {len(batch)} rows into smaller batches', flush=True)
             continue
         write(args.output, candidate)
         target = candidate
+        failures = [identity for identity in failures if tuple(identity) not in target.rows]
+        if failures_path.exists():
+            failures_path.write_text(json.dumps(failures, indent=2) + '\n')
         print(f'{len(target.rows)}/{len(source.rows)} translated', flush=True)
-    return 0
+    print(f'Run finished: {len(target.rows)}/{len(source.rows)} saved; {len(failures)} deferred rows', flush=True)
+    return 2 if failures else 0
 
 
 if __name__ == '__main__':
