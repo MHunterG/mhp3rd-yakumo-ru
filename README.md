@@ -2,7 +2,15 @@
 
 A work-in-progress Russian translation pack for [Yakumo](https://github.com/TeamGDB/Yakumo), plus a simple `.lang` translator.
 
-`translations/ru.lang` currently contains **8 sample UI translations**, not a complete translation. The pack requires Yakumo's language-file support. Cyrillic fonts and layout still need in-game review.
+**Experimental, rough translation.** The pack contains **17,762 translated entries across 23 supported text blocks**. Most were translated by DeepSeek Flash; the final rejected entries were corrected manually. It has not been fully proofread: wording and terminology may be wrong or inconsistent, and long names/descriptions can overflow the game's fixed UI fields. Coverage of the extracted source keys does not mean every piece of text or text drawn in images is translated.
+
+## Download and install
+
+Download `ru.lang` from [Releases](https://github.com/MHunterG/mhp3rd-yakumo-ru/releases). In a compatible Yakumo build, open **System → Text → Import translation…**, import the file, select **Russian** under **Game text language**, then restart the game.
+
+This preview requires Yakumo's translation mechanism and Cyrillic width fix currently in [PR #227](https://github.com/TeamGDB/Yakumo/pull/227). Compatibility with existing stable releases has not been verified. A developer build was tried on Steam Deck; all layouts, quests, dialogue and other platforms have not been exhaustively checked.
+
+Formatting tags, placeholders, exact keys and line-break sequences were checked against the local source, and Yakumo's native parser accepted all 17,762 entries. These are structural checks, not a guarantee of translation quality.
 
 ## Translate a file
 
