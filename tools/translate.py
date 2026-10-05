@@ -4,11 +4,12 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import urllib.error
 import urllib.request
-from .langfile import CODE, Language, TOKENS, read, validate, write
+from pathlib import Path
+
+from .langfile import CODE, TOKENS, Language, identity, read, row_order, validate, write
 
 MARKER = re.compile(r'__YAKUMO_TAG_\d+__')
 PROMPT = ('Translate game UI, item text, quests and dialogue into the requested target language. '
@@ -97,7 +98,7 @@ def decoded_rows(response, protected):
     values = result['translations']
     if not isinstance(values, dict) or set(values) != set(protected):
         raise ValueError('Response keys do not match the requested batch')
-    return {tuple(map(int, key.split(':'))): restore(value, protected[key]) for key, value in values.items()}
+    return {identity(key): restore(value, protected[key]) for key, value in values.items()}
 
 
 def main(argv=None, client=request):
@@ -126,7 +127,7 @@ def main(argv=None, client=request):
     errors = validate(source, target, args.language)
     if errors:
         raise ValueError('; '.join(errors))
-    pending = sorted(set(source.rows) - set(target.rows))
+    pending = sorted(set(source.rows) - set(target.rows), key=row_order)
     print(f'{len(target.rows)} existing; {len(pending)} pending')
     if not args.execute:
         print('Preview only. Add --execute to translate using paid API requests.')
