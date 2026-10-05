@@ -1,14 +1,14 @@
-"""Read and write exact-key Yakumo translation files."""
+"""Read and write exact and reference-wildcard Yakumo translation files."""
 
-from dataclasses import dataclass
-from pathlib import Path
 import os
 import re
 import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 
 MAX_BYTES = 16 * 1024 * 1024
 MAX_LINE = 64 * 1024
-Key = tuple[int, int, int]
+Key = tuple[int, int, int | str]
 CODE = re.compile(r'[A-Za-z0-9_-]{1,64}')
 TOKENS = re.compile(r'~[A-Za-z]\d{1,2}|%(?:%|(?:\d+\$)?[-+ #0]*(?:\d+|\*)?(?:\.(?:\d+|\*))?(?:hh|ll|[hljztL])?[diuoxXfFeEgGaAcspn])|[\n\r\t]')
 ESCAPES = {'n': '\n', 'r': '\r', 't': '\t', '\\': '\\', '#': '#', ';': ';'}
@@ -19,6 +19,22 @@ class Language:
     code: str
     name: str
     rows: dict[Key, str]
+
+
+def identity(text: str) -> Key:
+    """Parse an entry:table:index identity; only the index may be a wildcard."""
+    if not re.fullmatch(r'\d+:\d+:(?:\d+|\*)', text):
+        raise ValueError('Only exact numeric keys and reference wildcards are supported')
+    entry_text, table_text, index_text = text.split(':')
+    entry, table = int(entry_text), int(table_text)
+    index = '*' if index_text == '*' else int(index_text)
+    if entry > 0xFFFFFFFF or table > 65535 or (index != '*' and index > 0xFFFFFFFF):
+        raise ValueError('Translation key exceeds the format limits')
+    return entry, table, index
+
+
+def row_order(key: Key) -> tuple[int, int, int]:
+    return key[0], key[1], -1 if key[2] == '*' else key[2]
 
 
 def unescape(value: str) -> str:
@@ -70,13 +86,10 @@ def loads(text: str) -> Language:
             else:
                 name = value
             continue
-        if not re.fullmatch(r'\d+:\d+', key):
-            raise ValueError(f'Only exact numeric keys are supported: line {number}')
-        table, index = map(int, key.split(':'))
-        identity = (entry, table, index)
-        if table > 65535 or index > 0xFFFFFFFF or identity in rows:
+        row = identity(f'{entry}:{key}')
+        if row in rows:
             raise ValueError(f'Invalid or duplicate key at line {number}')
-        rows[identity] = value
+        rows[row] = value
     if not CODE.fullmatch(code) or not name:
         raise ValueError('A valid language code and name are required')
     return Language(code, name, rows)
@@ -94,7 +107,7 @@ def write(path: Path, language: Language) -> None:
     lines = ['# Work in progress. Missing keys fall back to the installed game text.',
              f'language = {escape(language.code)}', f'name = {escape(language.name)}']
     previous = None
-    for (entry, table, index), value in sorted(language.rows.items()):
+    for (entry, table, index), value in sorted(language.rows.items(), key=lambda item: row_order(item[0])):
         if entry != previous:
             lines.extend(['', f'[{entry}]'])
             previous = entry
